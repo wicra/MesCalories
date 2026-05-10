@@ -9,31 +9,53 @@ abstract class AppConstants {
   static const String kOpenAiApiKey = 'openai_api_key';
   static const String kGeminiApiKey = 'gemini_api_key';
   static const String kAnthropicApiKey = 'anthropic_api_key';
+  static const String kGroqApiKey = 'groq_api_key';
+  static const String kMistralApiKey = 'mistral_api_key';
+  static const String kCustomApiKey = 'custom_api_key';
   static const String kSelectedProvider = 'selected_ai_provider';
 
-  // --- Stockage sécurisé : URL de base (saisies par l'utilisateur) ---
+  // --- Stockage sécurisé : URL de base ---
   static const String kOpenAiBaseUrl = 'openai_base_url';
   static const String kGeminiBaseUrl = 'gemini_base_url';
   static const String kAnthropicBaseUrl = 'anthropic_base_url';
+  static const String kGroqBaseUrl = 'groq_base_url';
+  static const String kMistralBaseUrl = 'mistral_base_url';
+  static const String kCustomBaseUrl = 'custom_base_url';
 
-  // --- Stockage sécurisé : modèles (saisis par l'utilisateur) ---
+  // --- Stockage sécurisé : modèles ---
   static const String kOpenAiModel = 'openai_model';
   static const String kGeminiModel = 'gemini_model';
   static const String kAnthropicModel = 'anthropic_model';
+  static const String kGroqModel = 'groq_model';
+  static const String kMistralModel = 'mistral_model';
+  static const String kCustomModel = 'custom_model';
 
   // --- SharedPreferences (clés) ---
   static const String kOnboardingCompleted = 'onboarding_completed';
   static const String kThemeMode = 'theme_mode';
   static const String kDailyCalorieGoal = 'daily_calorie_goal';
 
-  // --- Hints IA : affichés dans les TextFields (non utilisés par défaut) ---
+  // --- Notifications ---
+  static const String kNotificationsEnabled = 'notifications_enabled';
+  static const String kNotificationLunchHour = 'notification_lunch_hour';
+  static const String kNotificationLunchMinute = 'notification_lunch_minute';
+  static const String kNotificationDinnerHour = 'notification_dinner_hour';
+  static const String kNotificationDinnerMinute = 'notification_dinner_minute';
+
+  // --- Hints IA ---
   static const String hintOpenAiBaseUrl = 'https://api.openai.com/v1';
   static const String hintGeminiBaseUrl =
       'https://generativelanguage.googleapis.com/v1beta';
   static const String hintAnthropicBaseUrl = 'https://api.anthropic.com/v1';
-  static const String hintOpenAiModel = 'gpt-4o';
+  static const String hintGroqBaseUrl = 'https://api.groq.com/openai/v1';
+  static const String hintMistralBaseUrl = 'https://api.mistral.ai/v1';
+  static const String hintCustomBaseUrl = 'https://api.example.com/v1';
+  static const String hintOpenAiModel = 'gpt-4o-mini';
   static const String hintGeminiModel = 'gemini-2.0-flash';
-  static const String hintAnthropicModel = 'claude-opus-4-5';
+  static const String hintAnthropicModel = 'claude-haiku-4-5';
+  static const String hintGroqModel = 'llama-3.3-70b-versatile';
+  static const String hintMistralModel = 'mistral-small-latest';
+  static const String hintCustomModel = 'model-name';
 
   // --- Objectifs caloriques par défaut ---
   static const int defaultCalorieGoal = 2000;
@@ -57,13 +79,17 @@ abstract class AppConstants {
 
 /// Fournisseurs d'IA supportés.
 enum AiProvider {
-  openai('OpenAI', 'GPT-4o'),
-  gemini('Google', 'Gemini 2.0 Flash'),
-  anthropic('Anthropic', 'Claude');
+  groq('Groq', 'LLaMA 3.3 70B', true),
+  mistral('Mistral', 'Mistral Small', true),
+  gemini('Gemini', 'Flash 2.0', true),
+  openai('OpenAI', 'GPT-4o mini', false),
+  anthropic('Anthropic', 'Claude Haiku', false),
+  custom('Perso.', 'Config. libre', false);
 
-  const AiProvider(this.label, this.modelName);
+  const AiProvider(this.label, this.modelName, this.isFree);
   final String label;
   final String modelName;
+  final bool isFree;
 }
 
 /// Niveaux d'activité physique pour le calcul TDEE.

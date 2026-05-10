@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/navigation/app_router.dart';
 import '../../../../core/utils/providers.dart';
+import '../../../../core/services/notification_service.dart';
 import '../../../auth/presentation/providers/profile_provider.dart';
-import '../../../tracking/data/repositories/tracking_repository_impl.dart';
 
 /// Page paramètres principale.
 class SettingsPage extends ConsumerWidget {
@@ -18,6 +17,8 @@ class SettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
     final profileAsync = ref.watch(userProfileProvider);
+    final prefs = ref.watch(preferencesServiceProvider);
+    final notifEnabled = prefs.notificationsEnabled;
 
     return Scaffold(
       body: CustomScrollView(
@@ -47,9 +48,66 @@ class SettingsPage extends ConsumerWidget {
                 const _SectionHeader(title: 'Intelligence Artificielle'),
                 _SettingsTile(
                   icon: Icons.key_rounded,
-                  label: 'Clés API',
-                  subtitle: 'Configurer OpenAI, Gemini, Anthropic',
+                  label: 'Clés API & Modèles',
+                  subtitle: 'Groq (gratuit), Mistral, Gemini, OpenAI, Perso...',
                   onTap: () => context.push(AppRoutes.apiKeys),
+                ),
+
+                const SizedBox(height: 24),
+
+                // --- Notifications ---
+                const _SectionHeader(title: 'Notifications'),
+                _NotificationTile(
+                  enabled: notifEnabled,
+                  lunchHour: prefs.lunchHour,
+                  lunchMinute: prefs.lunchMinute,
+                  dinnerHour: prefs.dinnerHour,
+                  dinnerMinute: prefs.dinnerMinute,
+                  onToggle: (value) async {
+                    await prefs.setNotificationsEnabled(value);
+                    if (value) {
+                      final granted =
+                          await NotificationService.requestPermission();
+                      if (granted) {
+                        await NotificationService.scheduleMealReminders(
+                          lunchHour: prefs.lunchHour,
+                          lunchMinute: prefs.lunchMinute,
+                          dinnerHour: prefs.dinnerHour,
+                          dinnerMinute: prefs.dinnerMinute,
+                        );
+                      } else {
+                        await prefs.setNotificationsEnabled(false);
+                      }
+                    } else {
+                      await NotificationService.cancelMealReminders();
+                    }
+                    // Forcer rebuild
+                    ref.invalidate(preferencesServiceProvider);
+                  },
+                  onChangeLunch: (h, m) async {
+                    await prefs.setLunchTime(h, m);
+                    if (prefs.notificationsEnabled) {
+                      await NotificationService.scheduleMealReminders(
+                        lunchHour: h,
+                        lunchMinute: m,
+                        dinnerHour: prefs.dinnerHour,
+                        dinnerMinute: prefs.dinnerMinute,
+                      );
+                    }
+                    ref.invalidate(preferencesServiceProvider);
+                  },
+                  onChangeDinner: (h, m) async {
+                    await prefs.setDinnerTime(h, m);
+                    if (prefs.notificationsEnabled) {
+                      await NotificationService.scheduleMealReminders(
+                        lunchHour: prefs.lunchHour,
+                        lunchMinute: prefs.lunchMinute,
+                        dinnerHour: h,
+                        dinnerMinute: m,
+                      );
+                    }
+                    ref.invalidate(preferencesServiceProvider);
+                  },
                 ),
 
                 const SizedBox(height: 24),
@@ -60,9 +118,7 @@ class SettingsPage extends ConsumerWidget {
                   currentMode: themeMode,
                   onChanged: (mode) {
                     ref.read(themeModeProvider.notifier).state = mode;
-                    ref
-                        .read(preferencesServiceProvider)
-                        .setThemeMode(mode);
+                    ref.read(preferencesServiceProvider).setThemeMode(mode);
                   },
                 ),
 
@@ -129,9 +185,7 @@ class SettingsPage extends ConsumerWidget {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              await ref
-                  .read(trackingRepositoryProvider)
-                  .clearAllData();
+              await ref.read(trackingRepositoryProvider).clearAllData();
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Données effacées.')),
@@ -404,21 +458,16 @@ class _ThemeSwitcher extends StatelessWidget {
                   children: [
                     Icon(
                       m.$2,
-                      color: selected
-                          ? AppColors.accent
-                          : AppColors.grey400,
+                      color: selected ? AppColors.accent : AppColors.grey400,
                       size: 20,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       m.$3,
                       style: AppTextStyles.caption.copyWith(
-                        color: selected
-                            ? AppColors.accent
-                            : AppColors.grey400,
-                        fontWeight: selected
-                            ? FontWeight.w600
-                            : FontWeight.w400,
+                        color: selected ? AppColors.accent : AppColors.grey400,
+                        fontWeight:
+                            selected ? FontWeight.w600 : FontWeight.w400,
                       ),
                     ),
                   ],
@@ -427,6 +476,186 @@ class _ThemeSwitcher extends StatelessWidget {
             ),
           );
         }).toList(),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Notifications tile
+// ---------------------------------------------------------------------------
+
+class _NotificationTile extends StatelessWidget {
+  const _NotificationTile({
+    required this.enabled,
+    required this.lunchHour,
+    required this.lunchMinute,
+    required this.dinnerHour,
+    required this.dinnerMinute,
+    required this.onToggle,
+    required this.onChangeLunch,
+    required this.onChangeDinner,
+  });
+
+  final bool enabled;
+  final int lunchHour;
+  final int lunchMinute;
+  final int dinnerHour;
+  final int dinnerMinute;
+  final ValueChanged<bool> onToggle;
+  final void Function(int h, int m) onChangeLunch;
+  final void Function(int h, int m) onChangeDinner;
+
+  String _fmt(int h, int m) =>
+      '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+
+  Future<void> _pickTime(
+    BuildContext context,
+    TimeOfDay initial,
+    void Function(int, int) onPicked,
+  ) async {
+    final picked = await showTimePicker(context: context, initialTime: initial);
+    if (picked != null) onPicked(picked.hour, picked.minute);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.notifications_outlined,
+                  color: AppColors.accent,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Rappels repas',
+                      style: AppTextStyles.labelMedium,
+                    ),
+                    Text(
+                      enabled
+                          ? 'Déjeuner ${_fmt(lunchHour, lunchMinute)} · Dîner ${_fmt(dinnerHour, dinnerMinute)}'
+                          : 'Désactivés',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.grey400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: enabled,
+                onChanged: onToggle,
+                activeColor: AppColors.accent,
+              ),
+            ],
+          ),
+        ),
+        if (enabled) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _TimePicker(
+                  label: 'Déjeuner',
+                  icon: Icons.wb_sunny_outlined,
+                  time: _fmt(lunchHour, lunchMinute),
+                  onTap: () => _pickTime(
+                    context,
+                    TimeOfDay(hour: lunchHour, minute: lunchMinute),
+                    onChangeLunch,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _TimePicker(
+                  label: 'Dîner',
+                  icon: Icons.nightlight_outlined,
+                  time: _fmt(dinnerHour, dinnerMinute),
+                  onTap: () => _pickTime(
+                    context,
+                    TimeOfDay(hour: dinnerHour, minute: dinnerMinute),
+                    onChangeDinner,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _TimePicker extends StatelessWidget {
+  const _TimePicker({
+    required this.label,
+    required this.icon,
+    required this.time,
+    required this.onTap,
+  });
+  final String label;
+  final IconData icon;
+  final String time;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.accent.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: AppColors.accent, size: 18),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.grey400,
+                  ),
+                ),
+                Text(
+                  time,
+                  style: AppTextStyles.labelLarge.copyWith(
+                    color: AppColors.accent,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

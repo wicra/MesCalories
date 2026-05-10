@@ -7,8 +7,7 @@ import '../errors/app_exceptions.dart';
 import '../../features/tracking/domain/entities/nutrition_analysis.dart';
 
 /// Service d'analyse nutritionnelle par IA.
-/// Supporte OpenAI, Gemini et Anthropic via les clés API de l'utilisateur.
-/// L'URL de base et le modèle sont saisis par l'utilisateur (pas de défauts).
+/// Supporte OpenAI, Gemini, Anthropic, Groq (gratuit) et Mistral (gratuit).
 class AiNutritionService {
   AiNutritionService({
     required FlutterSecureStorage secureStorage,
@@ -32,10 +31,16 @@ class AiNutritionService {
     return switch (provider) {
       AiProvider.openai =>
         _analyzeWithOpenAi(userText, apiKey, null, baseUrl, model),
+      AiProvider.groq => _analyzeWithOpenAiCompat(
+          userText, apiKey, null, baseUrl, model, 'groq'),
+      AiProvider.mistral =>
+        _analyzeWithMistral(userText, apiKey, baseUrl, model),
       AiProvider.gemini =>
         _analyzeWithGemini(userText, apiKey, null, baseUrl, model),
       AiProvider.anthropic =>
         _analyzeWithAnthropic(userText, apiKey, baseUrl, model),
+      AiProvider.custom => _analyzeWithOpenAiCompat(
+          userText, apiKey, null, baseUrl, model, 'custom'),
     };
   }
 
@@ -54,6 +59,16 @@ class AiNutritionService {
     return switch (provider) {
       AiProvider.openai =>
         _analyzeWithOpenAi(userText, apiKey, base64Image, baseUrl, model),
+      AiProvider.groq =>
+        // Groq Llama 3.2 vision ou fallback texte
+        _analyzeWithOpenAiCompat(
+            userText, apiKey, base64Image, baseUrl, model, 'groq'),
+      AiProvider.mistral => _analyzeWithMistral(
+          '$userText\n[Photo du repas attachée — estime les portions visuellement]',
+          apiKey,
+          baseUrl,
+          model,
+        ),
       AiProvider.gemini =>
         _analyzeWithGemini(userText, apiKey, base64Image, baseUrl, model),
       AiProvider.anthropic => _analyzeWithAnthropic(
@@ -62,11 +77,13 @@ class AiNutritionService {
           baseUrl,
           model,
         ),
+      AiProvider.custom => _analyzeWithOpenAiCompat(
+          userText, apiKey, base64Image, baseUrl, model, 'custom'),
     };
   }
 
   // ---------------------------------------------------------------------------
-  // OpenAI
+  // OpenAI (format officiel)
   // ---------------------------------------------------------------------------
 
   Future<NutritionAnalysis> _analyzeWithOpenAi(
@@ -104,6 +121,48 @@ class AiNutritionService {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Compatible OpenAI (Groq — sans response_format pour les modèles Llama)
+  // ---------------------------------------------------------------------------
+
+  Future<NutritionAnalysis> _analyzeWithOpenAiCompat(
+    String text,
+    String apiKey,
+    String? base64Image,
+    String baseUrl,
+    String model,
+    String providerName,
+  ) async {
+    final content = _buildOpenAiContent(text, base64Image);
+    try {
+      final response = await _dio.post(
+        '$baseUrl/chat/completions',
+        options: Options(headers: {'Authorization': 'Bearer $apiKey'}),
+        data: {
+          'model': model,
+          'messages': [
+            {'role': 'system', 'content': _systemPrompt},
+            {'role': 'user', 'content': content},
+          ],
+          'max_tokens': 1024,
+          'temperature': 0.2,
+        },
+      );
+      final rawJson =
+          response.data['choices'][0]['message']['content'] as String;
+      // Extraire le JSON du texte brut (Groq ne force pas json_object)
+      final jsonMatch = RegExp(r'\{.*\}', dotAll: true).firstMatch(rawJson);
+      final jsonStr = jsonMatch?.group(0) ?? rawJson;
+      return _parseAiResponse(jsonStr);
+    } on DioException catch (e) {
+      throw AiProviderException(
+        'Erreur $providerName : ${e.response?.data ?? e.message}',
+        provider: providerName,
+        code: e.response?.statusCode?.toString(),
+      );
+    }
+  }
+
   dynamic _buildOpenAiContent(String text, String? base64Image) {
     if (base64Image == null) return text;
     return [
@@ -113,6 +172,43 @@ class AiNutritionService {
         'image_url': {'url': 'data:image/jpeg;base64,$base64Image'},
       },
     ];
+  }
+
+  // ---------------------------------------------------------------------------
+  // Mistral AI
+  // ---------------------------------------------------------------------------
+
+  Future<NutritionAnalysis> _analyzeWithMistral(
+    String text,
+    String apiKey,
+    String baseUrl,
+    String model,
+  ) async {
+    try {
+      final response = await _dio.post(
+        '$baseUrl/chat/completions',
+        options: Options(headers: {'Authorization': 'Bearer $apiKey'}),
+        data: {
+          'model': model,
+          'messages': [
+            {'role': 'system', 'content': _systemPrompt},
+            {'role': 'user', 'content': text},
+          ],
+          'response_format': {'type': 'json_object'},
+          'max_tokens': 1024,
+          'temperature': 0.2,
+        },
+      );
+      final rawJson =
+          response.data['choices'][0]['message']['content'] as String;
+      return _parseAiResponse(rawJson);
+    } on DioException catch (e) {
+      throw AiProviderException(
+        'Erreur Mistral : ${e.response?.data ?? e.message}',
+        provider: 'mistral',
+        code: e.response?.statusCode?.toString(),
+      );
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -238,7 +334,7 @@ class AiNutritionService {
         await _secureStorage.read(key: AppConstants.kSelectedProvider);
     return AiProvider.values.firstWhere(
       (p) => p.name == value,
-      orElse: () => AiProvider.openai,
+      orElse: () => AiProvider.groq,
     );
   }
 
@@ -247,14 +343,18 @@ class AiNutritionService {
       AiProvider.openai => AppConstants.kOpenAiApiKey,
       AiProvider.gemini => AppConstants.kGeminiApiKey,
       AiProvider.anthropic => AppConstants.kAnthropicApiKey,
+      AiProvider.groq => AppConstants.kGroqApiKey,
+      AiProvider.mistral => AppConstants.kMistralApiKey,
+      AiProvider.custom => AppConstants.kCustomApiKey,
     };
     final apiKey = await _secureStorage.read(key: storageKey);
-    if (apiKey == null || apiKey.isEmpty) {
+    // Pour le provider custom, la clé est optionnelle (ex: Ollama sans auth)
+    if (provider != AiProvider.custom && (apiKey == null || apiKey.isEmpty)) {
       throw ConfigurationException(
         'Clé API ${provider.label} non configurée. Rendez-vous dans Paramètres.',
       );
     }
-    return apiKey;
+    return apiKey ?? '';
   }
 
   Future<String> _getBaseUrl(AiProvider provider) async {
@@ -262,12 +362,21 @@ class AiNutritionService {
       AiProvider.openai => AppConstants.kOpenAiBaseUrl,
       AiProvider.gemini => AppConstants.kGeminiBaseUrl,
       AiProvider.anthropic => AppConstants.kAnthropicBaseUrl,
+      AiProvider.groq => AppConstants.kGroqBaseUrl,
+      AiProvider.mistral => AppConstants.kMistralBaseUrl,
+      AiProvider.custom => AppConstants.kCustomBaseUrl,
     };
     final url = await _secureStorage.read(key: storageKey);
     if (url == null || url.isEmpty) {
-      throw ConfigurationException(
-        'URL API ${provider.label} non configurée. Rendez-vous dans Paramètres → Clés API.',
-      );
+      // URL par défaut pour les providers gratuits
+      return switch (provider) {
+        AiProvider.groq => AppConstants.hintGroqBaseUrl,
+        AiProvider.mistral => AppConstants.hintMistralBaseUrl,
+        AiProvider.gemini => AppConstants.hintGeminiBaseUrl,
+        _ => throw ConfigurationException(
+            'URL API ${provider.label} non configurée. Rendez-vous dans Paramètres.',
+          ),
+      };
     }
     return url;
   }
@@ -277,12 +386,21 @@ class AiNutritionService {
       AiProvider.openai => AppConstants.kOpenAiModel,
       AiProvider.gemini => AppConstants.kGeminiModel,
       AiProvider.anthropic => AppConstants.kAnthropicModel,
+      AiProvider.groq => AppConstants.kGroqModel,
+      AiProvider.mistral => AppConstants.kMistralModel,
+      AiProvider.custom => AppConstants.kCustomModel,
     };
     final model = await _secureStorage.read(key: storageKey);
     if (model == null || model.isEmpty) {
-      throw ConfigurationException(
-        'Modèle ${provider.label} non configuré. Rendez-vous dans Paramètres → Clés API.',
-      );
+      // Modèle par défaut pour les providers connus
+      return switch (provider) {
+        AiProvider.groq => AppConstants.hintGroqModel,
+        AiProvider.mistral => AppConstants.hintMistralModel,
+        AiProvider.gemini => AppConstants.hintGeminiModel,
+        _ => throw ConfigurationException(
+            'Modèle ${provider.label} non configuré. Rendez-vous dans Paramètres.',
+          ),
+      };
     }
     return model;
   }

@@ -49,7 +49,7 @@ class PreferencesService {
         await _secureStorage.read(key: AppConstants.kSelectedProvider);
     return AiProvider.values.firstWhere(
       (p) => p.name == value,
-      orElse: () => AiProvider.openai,
+      orElse: () => AiProvider.groq,
     );
   }
 
@@ -57,6 +57,9 @@ class PreferencesService {
         AiProvider.openai => AppConstants.kOpenAiApiKey,
         AiProvider.gemini => AppConstants.kGeminiApiKey,
         AiProvider.anthropic => AppConstants.kAnthropicApiKey,
+        AiProvider.groq => AppConstants.kGroqApiKey,
+        AiProvider.mistral => AppConstants.kMistralApiKey,
+        AiProvider.custom => AppConstants.kCustomApiKey,
       };
 
   // ---------------------------------------------------------------------------
@@ -81,12 +84,18 @@ class PreferencesService {
         AiProvider.openai => AppConstants.kOpenAiBaseUrl,
         AiProvider.gemini => AppConstants.kGeminiBaseUrl,
         AiProvider.anthropic => AppConstants.kAnthropicBaseUrl,
+        AiProvider.groq => AppConstants.kGroqBaseUrl,
+        AiProvider.mistral => AppConstants.kMistralBaseUrl,
+        AiProvider.custom => AppConstants.kCustomBaseUrl,
       };
 
   String _modelKey(AiProvider p) => switch (p) {
         AiProvider.openai => AppConstants.kOpenAiModel,
         AiProvider.gemini => AppConstants.kGeminiModel,
         AiProvider.anthropic => AppConstants.kAnthropicModel,
+        AiProvider.groq => AppConstants.kGroqModel,
+        AiProvider.mistral => AppConstants.kMistralModel,
+        AiProvider.custom => AppConstants.kCustomModel,
       };
 
   // ---------------------------------------------------------------------------
@@ -110,6 +119,35 @@ class PreferencesService {
 
   Future<void> setDailyCalorieGoal(int goal) async =>
       _prefs.setInt(AppConstants.kDailyCalorieGoal, goal);
+
+  // ---------------------------------------------------------------------------
+  // Notifications
+  // ---------------------------------------------------------------------------
+
+  bool get notificationsEnabled =>
+      _prefs.getBool(AppConstants.kNotificationsEnabled) ?? false;
+
+  Future<void> setNotificationsEnabled(bool value) =>
+      _prefs.setBool(AppConstants.kNotificationsEnabled, value);
+
+  int get lunchHour =>
+      _prefs.getInt(AppConstants.kNotificationLunchHour) ?? 12;
+  int get lunchMinute =>
+      _prefs.getInt(AppConstants.kNotificationLunchMinute) ?? 0;
+  int get dinnerHour =>
+      _prefs.getInt(AppConstants.kNotificationDinnerHour) ?? 19;
+  int get dinnerMinute =>
+      _prefs.getInt(AppConstants.kNotificationDinnerMinute) ?? 0;
+
+  Future<void> setLunchTime(int hour, int minute) async {
+    await _prefs.setInt(AppConstants.kNotificationLunchHour, hour);
+    await _prefs.setInt(AppConstants.kNotificationLunchMinute, minute);
+  }
+
+  Future<void> setDinnerTime(int hour, int minute) async {
+    await _prefs.setInt(AppConstants.kNotificationDinnerHour, hour);
+    await _prefs.setInt(AppConstants.kNotificationDinnerMinute, minute);
+  }
 
   // ---------------------------------------------------------------------------
   // Export / Suppression des données
