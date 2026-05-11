@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../utils/providers.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
 import '../../features/setup/presentation/pages/setup_flow_page.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/tracking/presentation/pages/tracking_page.dart';
@@ -112,42 +114,87 @@ class _MainShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: child,
-      bottomNavigationBar: _BottomNav(),
+      bottomNavigationBar: const _BottomNav(),
     );
   }
 }
 
 class _BottomNav extends StatelessWidget {
+  const _BottomNav();
+
   @override
   Widget build(BuildContext context) {
     final location = GoRouterState.of(context).uri.toString();
     final index = _indexFromLocation(location);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return NavigationBar(
-      selectedIndex: index,
-      onDestinationSelected: (i) => _navigate(context, i),
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home_rounded),
-          label: 'Accueil',
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        0,
+        AppSpacing.lg,
+        AppSpacing.lg,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isDark
+                ? AppColors.darkSurface.withValues(alpha: 0.94)
+                : AppColors.lightSurface.withValues(alpha: 0.94),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(
+              color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+            ),
+            boxShadow: isDark
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFF000000).withValues(alpha: 0.30),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    ),
+                  ]
+                : [
+                    BoxShadow(
+                      color: const Color(0xFF000000).withValues(alpha: 0.08),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+          ),
+          child: NavigationBar(
+            selectedIndex: index,
+            onDestinationSelected: (i) => _navigate(context, i),
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            elevation: 0,
+            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.home_outlined),
+                selectedIcon: Icon(Icons.home_rounded),
+                label: 'Accueil',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.add_circle_outline_rounded),
+                selectedIcon: Icon(Icons.add_circle_rounded),
+                label: 'Suivre',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.history_outlined),
+                selectedIcon: Icon(Icons.history_rounded),
+                label: 'Historique',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.settings_outlined),
+                selectedIcon: Icon(Icons.settings_rounded),
+                label: 'Réglages',
+              ),
+            ],
+          ),
         ),
-        NavigationDestination(
-          icon: Icon(Icons.add_circle_outline_rounded),
-          selectedIcon: Icon(Icons.add_circle_rounded),
-          label: 'Suivre',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.history_outlined),
-          selectedIcon: Icon(Icons.history_rounded),
-          label: 'Historique',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.settings_outlined),
-          selectedIcon: Icon(Icons.settings_rounded),
-          label: 'Paramètres',
-        ),
-      ],
+      ),
     );
   }
 

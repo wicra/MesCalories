@@ -23,8 +23,9 @@ class _SetupFlowPageState extends ConsumerState<SetupFlowPage> {
   final _pageController = PageController();
   int _step = 0;
 
-  // 0 = welcome, 10 = model, au total 11 pages (0-10)
-  static const int _lastStep = 10;
+  // Étapes: 0=welcome, 6=goal, 7=targetWeight(si lose), 8-11=IA (ou 7-10 si pas lose)
+  // Le PageView a toujours 12 pages (0-11), on skip 7 si goal != lose
+  static const int _lastStep = 11;
 
   // --- Profil ---
   final _nameController = TextEditingController();
@@ -34,6 +35,7 @@ class _SetupFlowPageState extends ConsumerState<SetupFlowPage> {
   double _height = 170;
   ActivityLevel? _activity;
   GoalType? _goal;
+  double _targetWeight = 65;
 
   // --- IA ---
   AiProvider? _provider;
@@ -62,11 +64,12 @@ class _SetupFlowPageState extends ConsumerState<SetupFlowPage> {
         4 => true,
         5 => _activity != null,
         6 => _goal != null,
-        7 => _provider != null,
-        8 => _provider == AiProvider.custom ||
+        7 => true, // targetWeight (toujours valide)
+        8 => _provider != null,
+        9 => _provider == AiProvider.custom ||
             _apiKeyController.text.trim().isNotEmpty,
-        9 => _baseUrlController.text.trim().isNotEmpty,
-        10 => _modelController.text.trim().isNotEmpty,
+        10 => _baseUrlController.text.trim().isNotEmpty,
+        11 => _modelController.text.trim().isNotEmpty,
         _ => false,
       };
 
@@ -87,11 +90,18 @@ class _SetupFlowPageState extends ConsumerState<SetupFlowPage> {
       await _saveAndFinish();
       return;
     }
-    _goTo(_step + 1);
+    // Sauter l'étape targetWeight si l'objectif n'est pas "perdre du poids"
+    final nextStep =
+        (_step == 6 && _goal != GoalType.lose) ? 8 : _step + 1;
+    _goTo(nextStep);
   }
 
   void _prev() {
-    if (_step > 1) _goTo(_step - 1);
+    if (_step <= 1) return;
+    // Sauter l'étape targetWeight en arrière si l'objectif n'est pas "perdre du poids"
+    final prevStep =
+        (_step == 8 && _goal != GoalType.lose) ? 6 : _step - 1;
+    _goTo(prevStep);
   }
 
   Future<void> _saveAndFinish() async {
@@ -202,6 +212,11 @@ class _SetupFlowPageState extends ConsumerState<SetupFlowPage> {
                           setState(() => _goal = g);
                           _next();
                         }),
+                    // Étape 7 — poids cible (uniquement si GoalType.lose)
+                    _TargetWeightStep(
+                        currentWeight: _weight,
+                        targetWeight: _targetWeight,
+                        onChanged: (v) => setState(() => _targetWeight = v)),
                     _ProviderStep(
                         selected: _provider,
                         onSelect: (p) {
@@ -889,6 +904,76 @@ class _GoalStep extends StatelessWidget {
             ),
           );
         }).toList(),
+      ),
+    );
+  }
+}
+
+class _TargetWeightStep extends StatelessWidget {
+  const _TargetWeightStep({
+    required this.currentWeight,
+    required this.targetWeight,
+    required this.onChanged,
+  });
+  final double currentWeight;
+  final double targetWeight;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final diff = (currentWeight - targetWeight).abs();
+    return _StepBody(
+      emoji: '🎯',
+      title: 'Quel est ton poids cible ?',
+      subtitle: 'Tu définiras ton rythme de progression.',
+      child: Column(
+        children: [
+          Text(
+            '${targetWeight.round()} kg',
+            style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                  color: AppColors.accent,
+                  fontWeight: FontWeight.w900,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            targetWeight < currentWeight
+                ? '− ${diff.round()} kg à perdre'
+                : '+ ${diff.round()} kg au-dessus du poids actuel',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.5),
+                ),
+          ),
+          const SizedBox(height: 24),
+          _StyledSlider(
+            value: targetWeight,
+            min: 30,
+            max: 200,
+            divisions: 340,
+            onChanged: onChanged,
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('30 kg',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.4))),
+              Text('200 kg',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.4))),
+            ],
+          ),
+        ],
       ),
     );
   }

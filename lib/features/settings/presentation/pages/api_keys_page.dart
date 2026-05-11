@@ -116,10 +116,17 @@ class _ApiKeysPageState extends ConsumerState<ApiKeysPage> {
               ),
             ),
             const SizedBox(height: 10),
-            _ProviderRow(
-              providers: const [AiProvider.custom],
-              selected: _selectedProvider,
-              onChanged: (p) => setState(() => _selectedProvider = p),
+            Row(
+              children: [
+                SizedBox(
+                  width: 120,
+                  child: _ProviderRow(
+                    providers: const [AiProvider.custom],
+                    selected: _selectedProvider,
+                    onChanged: (p) => setState(() => _selectedProvider = p),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 28),
             ...AiProvider.values
