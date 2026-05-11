@@ -150,6 +150,39 @@ class PreferencesService {
   }
 
   // ---------------------------------------------------------------------------
+  // Eau
+  // ---------------------------------------------------------------------------
+
+  int get waterGoalMl =>
+      _prefs.getInt(AppConstants.kWaterGoalMl) ?? AppConstants.defaultWaterGoalMl;
+
+  Future<void> setWaterGoalMl(int ml) =>
+      _prefs.setInt(AppConstants.kWaterGoalMl, ml);
+
+  /// Retourne la quantité d'eau bue aujourd'hui en ml.
+  int get waterIntakeTodayMl {
+    final savedDate = _prefs.getString(AppConstants.kWaterIntakeDate);
+    final today = DateTime.now();
+    final todayKey = '${today.year}-${today.month}-${today.day}';
+    // Si la date sauvegardée n'est pas aujourd'hui, reset à 0
+    if (savedDate != todayKey) return 0;
+    return _prefs.getInt(AppConstants.kWaterIntakeToday) ?? 0;
+  }
+
+  Future<void> addWaterMl(int ml) async {
+    final today = DateTime.now();
+    final todayKey = '${today.year}-${today.month}-${today.day}';
+    await _prefs.setString(AppConstants.kWaterIntakeDate, todayKey);
+    final current = waterIntakeTodayMl;
+    await _prefs.setInt(
+        AppConstants.kWaterIntakeToday, (current + ml).clamp(0, 9999));
+  }
+
+  Future<void> resetWaterToday() async {
+    await _prefs.setInt(AppConstants.kWaterIntakeToday, 0);
+  }
+
+  // ---------------------------------------------------------------------------
   // Export / Suppression des données
   // ---------------------------------------------------------------------------
 

@@ -12,6 +12,7 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_shadows.dart';
 import '../../../../core/navigation/app_router.dart';
 import '../../../../core/services/widget_service.dart';
+import '../../../../core/utils/providers.dart';
 import '../../../tracking/presentation/providers/tracking_provider.dart';
 import '../../../auth/presentation/providers/profile_provider.dart';
 
@@ -68,6 +69,8 @@ class DashboardPage extends ConsumerWidget {
                     _CalorieCard(summary: summary, isDark: isDark),
                     const SizedBox(height: AppSpacing.md),
                     _MacrosRow(summary: summary, isDark: isDark),
+                    const SizedBox(height: AppSpacing.md),
+                    _WaterCard(isDark: isDark),
                     const SizedBox(height: AppSpacing.xl),
                     _SectionHeader(date: today, isDark: isDark),
                     const SizedBox(height: AppSpacing.md),
@@ -140,29 +143,6 @@ class _DashboardAppBar extends StatelessWidget {
           ),
         ],
       ),
-      actions: [
-        GestureDetector(
-          onTap: () => context.go(AppRoutes.settings),
-          child: Container(
-            margin: const EdgeInsets.only(right: AppSpacing.lg),
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-              border: Border.all(
-                color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-              ),
-              boxShadow: isDark ? [] : AppShadows.soft,
-            ),
-            child: Icon(
-              Icons.person_outline_rounded,
-              color: subColor,
-              size: 18,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -539,6 +519,139 @@ class _SectionHeader extends StatelessWidget {
           style: AppTextStyles.caption.copyWith(color: subColor),
         ),
       ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Carte Eau — suivi journalier
+// ---------------------------------------------------------------------------
+
+class _WaterCard extends ConsumerWidget {
+  const _WaterCard({required this.isDark});
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final prefs = ref.watch(preferencesServiceProvider);
+    final intake = prefs.waterIntakeTodayMl;
+    final goal = prefs.waterGoalMl;
+    final progress = (intake / goal).clamp(0.0, 1.0);
+
+    final cardBg = isDark ? AppColors.darkSurface : AppColors.lightSurface;
+    final border = isDark ? AppColors.darkBorder : AppColors.lightBorder;
+    final textColor = isDark ? AppColors.darkText : AppColors.lightText;
+    final subColor =
+        isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+    final trackColor =
+        isDark ? AppColors.darkSurface3 : AppColors.lightSurface3;
+    const waterColor = Color(0xFF38BDF8); // sky-400
+
+    String intakeLabel() {
+      if (intake >= 1000) {
+        return '${(intake / 1000).toStringAsFixed(1)} L';
+      }
+      return '$intake ml';
+    }
+
+    String goalLabel() {
+      if (goal >= 1000) {
+        return '/ ${(goal / 1000).toStringAsFixed(1)} L';
+      }
+      return '/ $goal ml';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: border),
+        boxShadow: isDark ? [] : AppShadows.soft,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('💧', style: TextStyle(fontSize: 18)),
+              const SizedBox(width: AppSpacing.sm),
+              Text('Hydratation',
+                  style:
+                      AppTextStyles.labelMedium.copyWith(color: textColor)),
+              const Spacer(),
+              Text(intakeLabel(),
+                  style: AppTextStyles.numeralSmall.copyWith(
+                      color: waterColor, fontWeight: FontWeight.w700)),
+              Text(' ${goalLabel()}',
+                  style: AppTextStyles.caption.copyWith(color: subColor)),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress,
+              backgroundColor: trackColor,
+              valueColor: const AlwaysStoppedAnimation(waterColor),
+              minHeight: 8,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              for (final amount in [150, 250, 350, 500])
+                _WaterButton(
+                  ml: amount,
+                  waterColor: waterColor,
+                  subColor: subColor,
+                  isDark: isDark,
+                  onTap: () async {
+                    final p = ref.read(preferencesServiceProvider);
+                    await p.addWaterMl(amount);
+                    ref.invalidate(preferencesServiceProvider);
+                  },
+                ),
+            ],
+          ),
+        ],
+      ),
+    ).animate().fadeIn(delay: 80.ms);
+  }
+}
+
+class _WaterButton extends StatelessWidget {
+  const _WaterButton({
+    required this.ml,
+    required this.waterColor,
+    required this.subColor,
+    required this.isDark,
+    required this.onTap,
+  });
+  final int ml;
+  final Color waterColor, subColor;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isDark ? AppColors.darkSurface2 : AppColors.lightSurface2;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(AppRadius.button),
+        ),
+        child: Text(
+          '+${ml}ml',
+          style: AppTextStyles.caption.copyWith(
+              color: waterColor, fontWeight: FontWeight.w600),
+        ),
+      ),
     );
   }
 }

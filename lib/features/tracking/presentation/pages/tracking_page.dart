@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
@@ -77,6 +78,7 @@ class _TrackingPageState extends ConsumerState<TrackingPage> {
                 onVoiceStart: _startListening,
                 onVoiceStop: _stopListening,
                 onPhotoSelect: _selectPhoto,
+                onBarcodeSelect: _openBarcodeScanner,
               ),
       ),
     );
@@ -132,6 +134,20 @@ class _TrackingPageState extends ConsumerState<TrackingPage> {
     await ref.read(trackingNotifierProvider.notifier).analyzeText(text);
   }
 
+  Future<void> _openBarcodeScanner() async {
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _BarcodeScannerSheet(),
+    );
+    if (result != null && result.isNotEmpty) {
+      _textController.text = result;
+      setState(() => _mode = 'barcode');
+      await ref.read(trackingNotifierProvider.notifier).analyzeText(result);
+    }
+  }
+
   Future<void> _saveEntry(NutritionAnalysis analysis) async {
     final saved = await ref.read(trackingNotifierProvider.notifier).saveEntry(
           userInput: _textController.text.trim(),
@@ -171,6 +187,7 @@ class _InputView extends StatelessWidget {
     required this.onVoiceStart,
     required this.onVoiceStop,
     required this.onPhotoSelect,
+    required this.onBarcodeSelect,
     this.error,
   });
 
@@ -183,6 +200,7 @@ class _InputView extends StatelessWidget {
   final VoidCallback onVoiceStart;
   final VoidCallback onVoiceStop;
   final VoidCallback onPhotoSelect;
+  final VoidCallback onBarcodeSelect;
 
   @override
   Widget build(BuildContext context) {
@@ -294,6 +312,13 @@ class _InputView extends StatelessWidget {
                 onTap: onPhotoSelect,
                 icon: Icons.camera_alt_outlined,
                 label: 'Photo',
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(width: 10),
+              _GlassActionButton(
+                onTap: onBarcodeSelect,
+                icon: Icons.qr_code_scanner_rounded,
+                label: 'Scan',
                 color: AppColors.textSecondary,
               ),
               const Spacer(),
@@ -752,6 +777,96 @@ class _FoodItemRow extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Feuille scanner code-barres — MobileScanner
+// ---------------------------------------------------------------------------
+
+class _BarcodeScannerSheet extends StatefulWidget {
+  const _BarcodeScannerSheet();
+
+  @override
+  State<_BarcodeScannerSheet> createState() => _BarcodeScannerSheetState();
+}
+
+class _BarcodeScannerSheetState extends State<_BarcodeScannerSheet> {
+  final MobileScannerController _controller = MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates,
+  );
+  bool _scanned = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onDetect(BarcodeCapture capture) {
+    if (_scanned) return;
+    final raw = capture.barcodes.firstOrNull?.rawValue;
+    if (raw == null || raw.isEmpty) return;
+    _scanned = true;
+    // Renvoie le code-barres pour analyse IA
+    Navigator.of(context).pop(
+      'Code-barres $raw — analysez les valeurs nutritionnelles de ce produit.',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.65,
+      decoration: const BoxDecoration(
+        color: AppColors.black,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.textTertiary,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Scanner un code-barres',
+            style: AppTextStyles.headlineSmall.copyWith(color: AppColors.white),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Pointez la caméra vers le code-barres du produit.',
+            style:
+                AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: MobileScanner(
+                controller: _controller,
+                onDetect: _onDetect,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: Text(
+              'Annuler',
+              style: AppTextStyles.labelMedium.copyWith(color: AppColors.error),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
       ),
     );
   }

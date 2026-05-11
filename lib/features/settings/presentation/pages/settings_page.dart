@@ -127,6 +127,12 @@ class SettingsPage extends ConsumerWidget {
                 // --- Données ---
                 const _SectionHeader(title: 'Données'),
                 _SettingsTile(
+                  icon: Icons.bar_chart_rounded,
+                  label: 'Mes données',
+                  subtitle: 'Statistiques, calories et historique',
+                  onTap: () => context.push(AppRoutes.dataStats),
+                ),
+                _SettingsTile(
                   icon: Icons.delete_outline_rounded,
                   label: 'Effacer toutes les données',
                   subtitle: 'Supprimer définitivement l\'historique',

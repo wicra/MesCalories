@@ -57,11 +57,17 @@ abstract class AppConstants {
   static const String hintMistralModel = 'mistral-small-latest';
   static const String hintCustomModel = 'model-name';
 
+  // --- Eau ---
+  static const String kWaterGoalMl = 'water_goal_ml';
+  static const String kWaterIntakeToday = 'water_intake_today_ml';
+  static const String kWaterIntakeDate = 'water_intake_date';
+
   // --- Objectifs caloriques par défaut ---
   static const int defaultCalorieGoal = 2000;
   static const int defaultProteinGoal = 150;
   static const int defaultCarbGoal = 250;
   static const int defaultFatGoal = 65;
+  static const int defaultWaterGoalMl = 2000;
 
   // --- UI ---
   static const double borderRadius = 16.0;

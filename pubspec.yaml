@@ -55,6 +55,9 @@ dependencies:
   flutter_local_notifications: ">=17.0.0 <20.0.0"
   timezone: ">=0.9.0 <1.0.0"
 
+  # Scan code-barres
+  mobile_scanner: ^6.0.5
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

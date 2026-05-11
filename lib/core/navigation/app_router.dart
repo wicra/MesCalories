@@ -10,6 +10,7 @@ import '../../features/tracking/presentation/pages/tracking_page.dart';
 import '../../features/history/presentation/pages/history_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/settings/presentation/pages/api_keys_page.dart';
+import '../../features/settings/presentation/pages/data_page.dart';
 
 /// Routes nommées de l'application.
 abstract class AppRoutes {
@@ -20,6 +21,7 @@ abstract class AppRoutes {
   static const String history = '/history';
   static const String settings = '/settings';
   static const String apiKeys = '/settings/api-keys';
+  static const String dataStats = '/settings/data';
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -83,6 +85,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'apiKeys',
         pageBuilder: (context, state) =>
             _buildPage(const ApiKeysPage(), state),
+      ),
+      GoRoute(
+        path: AppRoutes.dataStats,
+        name: 'dataStats',
+        pageBuilder: (context, state) =>
+            _buildPage(const DataPage(), state),
       ),
     ],
   );
